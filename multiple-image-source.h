@@ -43,6 +43,10 @@
 #define TR_SWIPE                       "swipe"
 #define TR_SLIDE                       "slide"
 
+#ifndef da_get
+#define da_get(v, idx, type) ((type*)darray_item(sizeof(type), &v.da, idx))
+#endif
+
 /* ------------------------------------------------------------------------- */
 
 struct image_file_data {
@@ -96,6 +100,7 @@ typedef struct mis_line mis_line_t;
 typedef struct mis_polyline_node {
 	int x;
 	int y;
+	gs_vertbuffer_t * buf;
 } mis_polyline_node_t;
 
 struct mis_polyline{
@@ -169,6 +174,7 @@ struct multiple_image_source {
 	uint32_t height;
 	mis_line_t * line;
 	mis_rectangle_t * rect;
+	mis_polyline_t * polyline;
 };
 typedef struct multiple_image_source multiple_image_source_t;
 
@@ -197,17 +203,45 @@ static void mis_swapf(float * a, float * b){
 	*b = temp;
 }
 
-static void mis_init_line(mis_line_t * line);
+static bool mis_update_rect(mis_rect_t * rect, int x, int y){
+	if (x < rect->x){
+		rect->width += rect->x - x;
+		rect->x = x;
+	}
+	else if (x >= rect->x + rect->width){
+		rect->width += x - rect->x;
+	}
+
+	if (y < rect->y){
+		rect->height += rect->y - y;
+		rect->y = y;
+	}
+	else if (y >= rect->y + rect->height){
+		rect->height += y - rect->y;
+	}
+}
+
+static void mis_setup_line(mis_line_t * line);
 
 static void mis_destroy_line(mis_line_t * line);
 
 static void mis_paint_line(mis_line_t * line);
 
-static void mis_init_rectangle(mis_rectangle_t * rect);
+static void mis_setup_rectangle(mis_rectangle_t * rect);
 
 static void mis_destroy_rectangle(mis_rectangle_t * rect);
 
 static void mis_paint_rectangle(mis_rectangle_t * rect);
+
+static void mis_init_polyline(mis_polyline_t * polyline);
+
+static void mis_push_back_polyline_node(mis_polyline_t * polyline, int x, int y);
+
+static void mis_setup_polyline(mis_polyline_t * polyline);
+
+static void mis_destroy_polyline(mis_polyline_t * polyline);
+
+static void mis_paint_polyline(mis_polyline_t * polyline);
 
 static void mis_paint(multiple_image_source_t * mis);
 

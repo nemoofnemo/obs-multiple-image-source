@@ -308,6 +308,8 @@ static void mis_destroy(void *data)
 	bfree(mis->line);
 	mis_destroy_rectangle(mis->rect);
 	bfree(mis->rect);
+	mis_destroy_polyline(mis->polyline);
+	bfree(mis->polyline);
 	bfree(mis);
 }
 
@@ -328,13 +330,13 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source)
 
 	obs_source_update(source, NULL);
 	mis->line = bzalloc(sizeof(mis_line_t));
-	mis->line->x1 = 700;
-	mis->line->y1 = 700;
-	mis->line->x2 = 600;
-	mis->line->y2 = 600;
-	mis->line->width = 15;
+	mis->line->x1 = 315;
+	mis->line->y1 = 130;
+	mis->line->x2 = 260;
+	mis->line->y2 = 210;
+	mis->line->width = 8;
 	mis->line->rgba = mis_set_rgba(127, 127, 127, 128);
-	mis_init_line(mis->line);
+	mis_setup_line(mis->line);
 	
 	mis->rect = bzalloc(sizeof(mis_rectangle_t));
 	mis->rect->x = 300;
@@ -343,7 +345,18 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source)
 	mis->rect->height = 100;
 	mis->rect->line_width = 10;
 	mis->rect->rgba = mis_set_rgba(255, 0, 0, 128);
-	mis_init_rectangle(mis->rect);
+	mis_setup_rectangle(mis->rect);
+
+	mis->polyline = bzalloc(sizeof(mis_polyline_t));
+	mis_init_polyline(mis->polyline);
+	mis->polyline->width = 4;
+	mis->polyline->rgba = mis_set_rgba(255, 0, 0, 255);
+	mis_push_back_polyline_node(mis->polyline, 120, 110);
+	mis_push_back_polyline_node(mis->polyline, 150, 130);
+	mis_push_back_polyline_node(mis->polyline, 190, 210);
+	mis_push_back_polyline_node(mis->polyline, 160, 103);
+	mis_push_back_polyline_node(mis->polyline, 10, 21);
+	mis_setup_polyline(mis->polyline);
 	
 	return mis;
 
@@ -536,7 +549,7 @@ static void mis_deactivate(void *data)
 
 /* ------------------------------------------------------------------------- */
 
-static void mis_init_line(mis_line_t * line){
+static void mis_setup_line(mis_line_t * line){
 	if (line->width <= 0)
 		return;
 
@@ -545,7 +558,7 @@ static void mis_init_line(mis_line_t * line){
 	bool is_y_equal = line->y1 == line->y2;
 
 	if (is_x_equal == 0 && is_y_equal == 0){
-		float k1 = ((float)(line->y1 - line->y2)) / (line->x1 - line->x2);
+		float k1 = ((float)line->y1 - (float)line->y2) / ((float)line->x1 - (float)line->x2);
 		float k2 = -1 / k1;
 		float b = line->y2 - k1 * line->x2;
 		float b2;
@@ -559,19 +572,19 @@ static void mis_init_line(mis_line_t * line){
 			x_end = line->x1;
 			y_start = line->y2;
 			y_end = line->y1;
-			b2 = line->y2 - k2 * x_start;
 		}
 		else{
 			x_start = line->x1;
 			x_end = line->x2;
 			y_start = line->y1;
 			y_end = line->y2;
-			b2 = line->y1 - k2 * x_start;
 		}
+		b2 = y_start - k2 * x_start;
+
 		int x_offset = x_end - x_start;
 		int y_offset = y_end - y_start;
 
-		float a = (float)line->width * cos(atanf(k2));
+		float a = (float)line->width * cos(atanf(k1));
 		float y1 = y_start - a / 2;
 		float y2 = y_start + a - a / 2;
 		if (fabs(y2 - y1) < 1.0f){
@@ -671,7 +684,7 @@ static void mis_paint_line(mis_line_t * line){
 	gs_load_vertexbuffer(NULL);
 }
 
-static void mis_init_rectangle(mis_rectangle_t * rect){
+static void mis_setup_rectangle(mis_rectangle_t * rect){
 	int width_ex = rect->line_width / 2;
 	mis_line_t line;
 	line.rgba = rect->rgba;
@@ -680,25 +693,25 @@ static void mis_init_rectangle(mis_rectangle_t * rect){
 	line.y1 = rect->y;
 	line.x2 = rect->x + rect->width + width_ex;
 	line.y2 = rect->y;
-	mis_init_line(&line);
+	mis_setup_line(&line);
 	rect->buf_arr[0] = line.buf;
 	line.x1 = rect->x + rect->width;
 	line.y1 = rect->y + width_ex;
 	line.x2 = line.x1;
 	line.y2 = rect->y + rect->height - width_ex;
-	mis_init_line(&line);
+	mis_setup_line(&line);
 	rect->buf_arr[1] = line.buf;
 	line.x1 = rect->x + rect->width + width_ex;
 	line.y1 = rect->y + rect->height;
 	line.x2 = rect->x - width_ex;
 	line.y2 = rect->y + rect->height;
-	mis_init_line(&line);
+	mis_setup_line(&line);
 	rect->buf_arr[2] = line.buf;
 	line.x1 = rect->x;
 	line.y1 = rect->y + rect->height - width_ex;
 	line.x2 = rect->x;
 	line.y2 = rect->y + width_ex;
-	mis_init_line(&line);
+	mis_setup_line(&line);
 	rect->buf_arr[3] = line.buf;
 }
 
@@ -733,9 +746,81 @@ static void mis_paint_rectangle(mis_rectangle_t * rect){
 	gs_technique_end(tech);
 }
 
+static void mis_init_polyline(mis_polyline_t * polyline){
+	da_init(polyline->node_arr);
+}
+
+static void mis_push_back_polyline_node(mis_polyline_t * polyline, int x, int y){
+	mis_polyline_node_t node;
+	node.x = x;
+	node.y = y;
+	node.buf = NULL;
+	da_push_back(polyline->node_arr, &node);
+}
+
+static void mis_setup_polyline(mis_polyline_t * polyline){
+	if (polyline->node_arr.num > 1){
+		size_t limit = polyline->node_arr.num - 1;
+		mis_line_t line;
+		mis_polyline_node_t * temp;
+		line.rgba = polyline->rgba;
+		line.width = polyline->width;
+		for (size_t i = 0; i < limit; ++i){
+			temp = da_get(polyline->node_arr, i + 1, mis_polyline_node_t);
+			line.x1 = temp->x;
+			line.y1 = temp->y;
+			temp = da_get(polyline->node_arr, i, mis_polyline_node_t);
+			line.x2 = temp->x;
+			line.y2 = temp->y;
+			mis_setup_line(&line);
+			temp->buf = line.buf;
+		}
+	}
+}
+
+static void mis_destroy_polyline(mis_polyline_t * polyline){
+	if (polyline->node_arr.num > 1){
+		size_t limit = polyline->node_arr.num - 1;
+		obs_enter_graphics();
+		for (size_t i = 0; i < limit; ++i){
+			gs_vertexbuffer_destroy(da_get(polyline->node_arr, i, mis_polyline_node_t)->buf);
+		}
+		obs_leave_graphics();
+	}
+	da_free(polyline->node_arr);
+}
+
+static void mis_paint_polyline(mis_polyline_t * polyline){
+	if (polyline->node_arr.num > 1){
+		gs_effect_t    *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
+		gs_eparam_t    *color = gs_effect_get_param_by_name(solid, "color");
+		gs_technique_t *tech = gs_effect_get_technique(solid, "Solid");
+
+		struct vec4 colorVal;
+		vec4_set(&colorVal, mis_get_rgba_r(polyline->rgba),
+			mis_get_rgba_g(polyline->rgba),
+			mis_get_rgba_b(polyline->rgba),
+			(float)mis_get_rgba_a(polyline->rgba) / 0xff);
+
+		gs_effect_set_vec4(color, &colorVal);
+		gs_technique_begin(tech);
+		gs_technique_begin_pass(tech, 0);
+		size_t limit = polyline->node_arr.num - 1;
+		for (size_t i = 0; i < limit; ++i){
+			gs_load_vertexbuffer(da_get(polyline->node_arr, i, mis_polyline_node_t)->buf);
+			gs_draw(GS_TRISTRIP, 0, 0);
+			gs_load_vertexbuffer(NULL);
+		}
+		gs_technique_end_pass(tech);
+		gs_technique_end(tech);
+	}
+}
+
+
 /* ------------------------------------------------------------------------- */
 
 static void mis_paint(multiple_image_source_t * mis){
 	mis_paint_line(mis->line);
 	mis_paint_rectangle(mis->rect);
+	mis_paint_polyline(mis->polyline);
 }
