@@ -130,7 +130,6 @@ typedef struct mis_node mis_node_t;
 
 struct mis_shape_array{
 	DARRAY(mis_node_t) shape_array;
-	//pen_source_shape_t paint_status;
 };
 typedef struct mis_shape_array mis_shape_array_t;
 
@@ -172,9 +171,11 @@ struct multiple_image_source {
 
 	uint32_t width;
 	uint32_t height;
-	mis_line_t * line;
+	mis_pages_t pages;
+	/*mis_line_t * line;
 	mis_rectangle_t * rect;
-	mis_polyline_t * polyline;
+	mis_polyline_t * polyline;*/
+
 };
 typedef struct multiple_image_source multiple_image_source_t;
 
@@ -221,18 +222,29 @@ static bool mis_update_rect(mis_rect_t * rect, int x, int y){
 	}
 }
 
+/* ------------------------------------------------------------------------- */
+
+//line
 static void mis_setup_line(mis_line_t * line);
 
 static void mis_destroy_line(mis_line_t * line);
 
+static void mis_update_line(mis_line_t * line);
+
 static void mis_paint_line(mis_line_t * line);
 
+
+//rectangele
 static void mis_setup_rectangle(mis_rectangle_t * rect);
 
 static void mis_destroy_rectangle(mis_rectangle_t * rect);
 
+static void mis_update_rectangle(mis_rectangle_t * rect);
+
 static void mis_paint_rectangle(mis_rectangle_t * rect);
 
+
+//polyline
 static void mis_init_polyline(mis_polyline_t * polyline);
 
 static void mis_push_back_polyline_node(mis_polyline_t * polyline, int x, int y);
@@ -241,11 +253,54 @@ static void mis_setup_polyline(mis_polyline_t * polyline);
 
 static void mis_destroy_polyline(mis_polyline_t * polyline);
 
+static void mis_update_polyline(mis_polyline_t * polyline);
+
 static void mis_paint_polyline(mis_polyline_t * polyline);
 
-static void mis_paint(multiple_image_source_t * mis);
+
+//shape array
+static void * mis_create_shape(mis_shape_t shape);
+
+static void mis_delete_shape(mis_shape_t shape, void * data);
+
+static void mis_init_shape_array(mis_shape_array_t * arr);
+
+static void mis_destroy_shape_array(mis_shape_array_t * arr);
+//shape must be setup first.
+static void mis_push_shape_array(mis_shape_array_t * arr, mis_shape_t shape, void * data);
+
+static mis_node_t * mis_get_from_array(mis_shape_array_t * arr, size_t idx);
+
+static mis_node_t * mis_get_last_from_array(mis_shape_array_t * arr);
+
+static void mis_paint_shape_array(mis_shape_array_t * arr);
+
+
+//pages
+static void mis_init_pages(mis_pages_t * pages);
+
+static void mis_destroy_pages(mis_pages_t * pages);
+//create and push a new page to mis_pages
+static void mis_push_new_page(mis_pages_t * pages);
+
+static mis_shape_array_t * mis_get_page(mis_pages_t * pages, size_t idx);
+
+//static void mis_push_shape_to_page(mis_pages_t * pages, size_t idx, mis_node_t * shape);
+
+//static void mis_remove_shape_from_page();
+
+//static void mis_remove_page(mis_pages_t * pages, size_t idx);
+
+static void mis_pages_prev(mis_pages_t * pages);
+
+static void mis_pages_next(mis_pages_t * pages);
+
+static void mis_paint_pages(mis_pages_t * pages);
+
 
 /* ------------------------------------------------------------------------- */
+
+static void mis_paint(multiple_image_source_t * mis);
 
 static obs_source_t *get_transition(struct multiple_image_source *mis);
 

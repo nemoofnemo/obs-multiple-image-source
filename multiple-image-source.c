@@ -304,12 +304,7 @@ static void mis_destroy(void *data)
 	obs_source_release(mis->transition);
 	free_files(&mis->files.da);
 	pthread_mutex_destroy(&mis->mutex);
-	mis_destroy_line(mis->line);
-	bfree(mis->line);
-	mis_destroy_rectangle(mis->rect);
-	bfree(mis->rect);
-	mis_destroy_polyline(mis->polyline);
-	bfree(mis->polyline);
+	mis_destroy_pages(&mis->pages);
 	bfree(mis);
 }
 
@@ -329,35 +324,42 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source)
 		goto error;
 
 	obs_source_update(source, NULL);
-	mis->line = bzalloc(sizeof(mis_line_t));
-	mis->line->x1 = 315;
-	mis->line->y1 = 130;
-	mis->line->x2 = 260;
-	mis->line->y2 = 210;
-	mis->line->width = 8;
-	mis->line->rgba = mis_set_rgba(127, 127, 127, 128);
-	mis_setup_line(mis->line);
-	
-	mis->rect = bzalloc(sizeof(mis_rectangle_t));
-	mis->rect->x = 300;
-	mis->rect->y = 400;
-	mis->rect->width = 200;
-	mis->rect->height = 100;
-	mis->rect->line_width = 10;
-	mis->rect->rgba = mis_set_rgba(255, 0, 0, 128);
-	mis_setup_rectangle(mis->rect);
 
-	mis->polyline = bzalloc(sizeof(mis_polyline_t));
-	mis_init_polyline(mis->polyline);
-	mis->polyline->width = 4;
-	mis->polyline->rgba = mis_set_rgba(255, 0, 0, 255);
-	mis_push_back_polyline_node(mis->polyline, 120, 110);
-	mis_push_back_polyline_node(mis->polyline, 150, 130);
-	mis_push_back_polyline_node(mis->polyline, 190, 210);
-	mis_push_back_polyline_node(mis->polyline, 160, 103);
-	mis_push_back_polyline_node(mis->polyline, 10, 21);
-	mis_setup_polyline(mis->polyline);
+	mis_init_pages(&mis->pages);
+	mis_push_new_page(&mis->pages);
+
+	mis_line_t * line = mis_create_shape(LINE);
+	line->x1 = 120;
+	line->y1 = 210;
+	line->x2 = 210;
+	line->y2 = 110;
+	line->width = 8;
+	line->rgba = mis_set_rgba(127, 127, 127, 128);
+	mis_setup_line(line);
 	
+	mis_rectangle_t * rect = mis_create_shape(RECTANGLE);
+	rect->x = 300;
+	rect->y = 400;
+	rect->width = 200;
+	rect->height = 100;
+	rect->line_width = 10;
+	rect->rgba = mis_set_rgba(255, 0, 0, 128);
+	mis_setup_rectangle(rect);
+
+	mis_polyline_t * polyline = mis_create_shape(POLYLINE);
+	polyline->width = 4;
+	polyline->rgba = mis_set_rgba(255, 0, 0, 255);
+	mis_push_back_polyline_node(polyline, 120, 110);
+	mis_push_back_polyline_node(polyline, 150, 130);
+	mis_push_back_polyline_node(polyline, 190, 210);
+	mis_push_back_polyline_node(polyline, 160, 103);
+	mis_push_back_polyline_node(polyline, 10, 21);
+	mis_setup_polyline(polyline);
+	
+	mis_push_shape_array(mis_get_page(&mis->pages, 0), LINE, line);
+	mis_push_shape_array(mis_get_page(&mis->pages, 0), RECTANGLE, rect);
+	mis_push_shape_array(mis_get_page(&mis->pages, 0), POLYLINE, polyline);
+
 	return mis;
 
 error:
@@ -411,6 +413,17 @@ static void mis_video_tick(void *data, float seconds)
 			}
 			obs_data_set_string(settings, S_DIRECTION, "");
 		}
+		int x = obs_data_get_int(settings, "test_x");
+		int y = obs_data_get_int(settings, "test_y");
+		if (x != 0 && y != 0){
+			mis_shape_array_t * page = mis_get_page(&mis->pages, mis->pages.cur_page);
+			mis_node_t * node = mis_get_last_from_array(page);
+			mis_polyline_t * p = node->data;
+			mis_push_back_polyline_node(p, x, y);
+			mis_update_polyline(p);
+		}
+		obs_data_set_int(settings, "test_x", 0);
+		obs_data_set_int(settings, "test_y", 0);
 		obs_data_release(settings);
 		return;
 	}
@@ -663,6 +676,15 @@ static void mis_destroy_line(mis_line_t * line){
 	}
 }
 
+static void mis_update_line(mis_line_t * line){
+	if (line && line->buf){
+		obs_enter_graphics();
+		gs_vertexbuffer_destroy(line->buf);
+		obs_leave_graphics();
+		mis_setup_line(line);
+	}
+}
+
 static void mis_paint_line(mis_line_t * line){
 	gs_effect_t    *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
 	gs_eparam_t    *color = gs_effect_get_param_by_name(solid, "color");
@@ -718,9 +740,22 @@ static void mis_setup_rectangle(mis_rectangle_t * rect){
 static void mis_destroy_rectangle(mis_rectangle_t * rect){
 	obs_enter_graphics();
 	for (int i = 0; i < 4; ++i){
-		gs_vertexbuffer_destroy(rect->buf_arr[i]);
+		if (rect->buf_arr[i])
+			gs_vertexbuffer_destroy(rect->buf_arr[i]);
 	}
 	obs_leave_graphics();
+}
+
+static void mis_update_rectangle(mis_rectangle_t * rect){
+	if (rect && rect->buf_arr){
+		obs_enter_graphics();
+		for (int i = 0; i < 4; ++i){
+			if (rect->buf_arr[i])
+				gs_vertexbuffer_destroy(rect->buf_arr[i]);
+		}
+		obs_leave_graphics();
+		mis_setup_rectangle(rect);
+	}
 }
 
 static void mis_paint_rectangle(mis_rectangle_t * rect){
@@ -783,11 +818,29 @@ static void mis_destroy_polyline(mis_polyline_t * polyline){
 		size_t limit = polyline->node_arr.num - 1;
 		obs_enter_graphics();
 		for (size_t i = 0; i < limit; ++i){
-			gs_vertexbuffer_destroy(da_get(polyline->node_arr, i, mis_polyline_node_t)->buf);
+			gs_vertbuffer_t * temp =
+				da_get(polyline->node_arr, i, mis_polyline_node_t)->buf;
+			if (temp)
+				gs_vertexbuffer_destroy(temp);
 		}
 		obs_leave_graphics();
 	}
 	da_free(polyline->node_arr);
+}
+
+static void mis_update_polyline(mis_polyline_t * polyline){
+	if (polyline->node_arr.num > 1){
+		size_t limit = polyline->node_arr.num - 1;
+		obs_enter_graphics();
+		for (size_t i = 0; i < limit; ++i){
+			gs_vertbuffer_t * temp =
+				da_get(polyline->node_arr, i, mis_polyline_node_t)->buf;
+			if (temp)
+				gs_vertexbuffer_destroy(temp);
+		}
+		obs_leave_graphics();
+		mis_setup_polyline(polyline);
+	}
 }
 
 static void mis_paint_polyline(mis_polyline_t * polyline){
@@ -816,11 +869,159 @@ static void mis_paint_polyline(mis_polyline_t * polyline){
 	}
 }
 
+static void * mis_create_shape(mis_shape_t shape){
+	void * ret = NULL;
+	switch (shape){
+	case NOTHING:
+		break;
+	case LINE:
+		ret = bzalloc(sizeof(mis_line_t));
+		break;
+	case RECTANGLE:
+		ret = bzalloc(sizeof(mis_rectangle_t));
+		break;
+	case POLYLINE:
+		ret = bzalloc(sizeof(mis_polyline_t));
+		mis_init_polyline(ret);
+		break;
+	default:
+		break;
+	}
+	return ret;
+}
+
+static void mis_delete_shape(mis_shape_t shape, void * data){
+	switch (shape){
+	case NOTHING:
+		break;
+	case LINE:
+		mis_destroy_line(data);
+		break;
+	case RECTANGLE:
+		mis_destroy_rectangle(data);
+		break;
+	case POLYLINE:
+		mis_destroy_polyline(data);
+		break;
+	default:
+		break;
+	}
+	bfree(data);
+}
+
+static void mis_init_shape_array(mis_shape_array_t * arr){
+	da_init(arr->shape_array);
+}
+
+static void mis_destroy_shape_array(mis_shape_array_t * arr){
+	size_t limit = arr->shape_array.num;
+	mis_node_t * temp;
+	for (size_t i = 0; i < limit; ++i){
+		temp = da_get(arr->shape_array, i, mis_node_t);
+		mis_delete_shape(temp->shape, temp->data);
+	}
+	da_free(arr->shape_array);
+}
+
+static void mis_push_shape_array(mis_shape_array_t * arr, mis_shape_t shape, void * data){
+	mis_node_t node;
+	node.data = data;
+	node.shape = shape;
+	da_push_back(arr->shape_array, &node);
+}
+
+static mis_node_t * mis_get_from_array(mis_shape_array_t * arr, size_t idx){
+	return da_get(arr->shape_array, idx, mis_node_t);
+}
+
+static mis_node_t * mis_get_last_from_array(mis_shape_array_t * arr){
+	return mis_get_from_array(arr, arr->shape_array.num - 1);
+}
+
+static void mis_paint_shape_array(mis_shape_array_t * arr){
+	size_t limit = arr->shape_array.num;
+	mis_node_t * temp;
+	for (size_t i = 0; i < limit; ++i){
+		temp = da_get(arr->shape_array, i, mis_node_t);
+		switch (temp->shape){
+		case NOTHING:
+			warn("in mis_paint_shape_array: nothing paint.");
+			break;
+		case LINE:
+			mis_paint_line(temp->data);
+			break;
+		case RECTANGLE:
+			mis_paint_rectangle(temp->data);
+			break;
+		case POLYLINE:
+			mis_paint_polyline(temp->data);
+			break;
+		default:
+			warn("in mis_paint_shape_array: invalid shape.");
+			break;
+		}
+	}
+}
+
+static void mis_init_pages(mis_pages_t * pages){
+	da_init(pages->pages);
+	pages->cur_page = 0;
+	pages->paint_status = NOTHING;
+}
+
+static void mis_destroy_pages(mis_pages_t * pages){
+	size_t limit = pages->pages.num;
+	for (size_t i = 0; i < limit; ++i){
+		mis_destroy_shape_array(mis_get_page(pages, i));
+	}
+	da_free(pages->pages);
+	pages->cur_page = 0;
+	pages->paint_status = NOTHING;
+}
+
+static void mis_push_new_page(mis_pages_t * pages){
+	mis_shape_array_t page;
+	mis_init_shape_array(&page);
+	da_push_back(pages->pages, &page);
+}
+
+static mis_shape_array_t * mis_get_page(mis_pages_t * pages, size_t idx){
+	return da_get(pages->pages, idx, mis_shape_array_t);
+}
+
+static void mis_pages_prev(mis_pages_t * pages){
+	if (pages->pages.num == 0)
+		return;
+	if (pages->cur_page == 0){
+		pages->cur_page = pages->pages.num - 1;
+	}
+	else{
+		pages->cur_page--;
+	}
+}
+
+static void mis_pages_next(mis_pages_t * pages){
+	if (pages->pages.num == 0)
+		return;
+	if (pages->cur_page == pages->pages.num - 1){
+		pages->cur_page = 0;
+	}
+	else{
+		pages->cur_page++;
+	}
+}
+
+static void mis_paint_pages(mis_pages_t * pages){
+	if (pages->pages.num > 0){
+		mis_paint_shape_array(mis_get_page(pages, pages->cur_page));
+	}
+}
 
 /* ------------------------------------------------------------------------- */
 
 static void mis_paint(multiple_image_source_t * mis){
-	mis_paint_line(mis->line);
+	/*mis_paint_line(mis->line);
 	mis_paint_rectangle(mis->rect);
-	mis_paint_polyline(mis->polyline);
+	mis_paint_polyline(mis->polyline);*/
+	mis_paint_pages(&mis->pages);
 }
