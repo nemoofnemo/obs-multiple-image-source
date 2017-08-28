@@ -8,7 +8,7 @@
 #include <math.h>
 
 //this obs-plugin is created by yuanyi.
-//2017/08/21
+//2017/08/21.
 
 #define blogex(log_level, format, ...) \
 	blog(log_level, "[pen_source: '%s'] " format, \

@@ -329,10 +329,10 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source)
 	mis_push_new_page(&mis->pages);
 
 	mis_line_t * line = mis_create_shape(LINE);
-	line->x1 = 120;
-	line->y1 = 210;
-	line->x2 = 210;
-	line->y2 = 110;
+	line->x1 = 1;
+	line->y1 = 1;
+	line->x2 = 2;
+	line->y2 = 2;
 	line->width = 8;
 	line->rgba = mis_set_rgba(127, 127, 127, 128);
 	mis_setup_line(line);
@@ -413,17 +413,7 @@ static void mis_video_tick(void *data, float seconds)
 			}
 			obs_data_set_string(settings, S_DIRECTION, "");
 		}
-		int x = obs_data_get_int(settings, "test_x");
-		int y = obs_data_get_int(settings, "test_y");
-		if (x != 0 && y != 0){
-			mis_shape_array_t * page = mis_get_page(&mis->pages, mis->pages.cur_page);
-			mis_node_t * node = mis_get_last_from_array(page);
-			mis_polyline_t * p = node->data;
-			mis_push_back_polyline_node(p, x, y);
-			mis_update_polyline(p);
-		}
-		obs_data_set_int(settings, "test_x", 0);
-		obs_data_set_int(settings, "test_y", 0);
+		mis_process_paint_event(mis, settings);
 		obs_data_release(settings);
 		return;
 	}
@@ -447,6 +437,29 @@ static void mis_video_tick(void *data, float seconds)
 		if (mis->files.num)
 			do_transition(mis, false);
 	}
+}
+
+static void mis_process_paint_event(multiple_image_source_t * mis, obs_data_t * settings){
+	bool need_update = obs_data_get_bool(settings, "need_update");
+	if (need_update){
+		obs_data_set_bool(settings, "need_update", false);
+		int x = obs_data_get_int(settings, "mouse_x");
+		int y = obs_data_get_int(settings, "mouse_y");
+
+		obs_data_set_int(settings, "mouse_x", 0);
+		obs_data_set_int(settings, "mouse_y", 0);
+	}
+	/*int x = obs_data_get_int(settings, "test_x");
+	int y = obs_data_get_int(settings, "test_y");
+	if (x != 0 && y != 0){
+		mis_shape_array_t * page = mis_get_page(&mis->pages, mis->pages.cur_page);
+		mis_node_t * node = mis_get_last_from_array(page);
+		mis_polyline_t * p = node->data;
+		mis_push_back_polyline_node(p, x, y);
+		mis_update_polyline(p);
+	}
+	obs_data_set_int(settings, "test_x", 0);
+	obs_data_set_int(settings, "test_y", 0);*/
 }
 
 static inline bool mis_audio_render_(obs_source_t *transition, uint64_t *ts_out,
@@ -1018,10 +1031,7 @@ static void mis_paint_pages(mis_pages_t * pages){
 }
 
 /* ------------------------------------------------------------------------- */
-
+//1s
 static void mis_paint(multiple_image_source_t * mis){
-	/*mis_paint_line(mis->line);
-	mis_paint_rectangle(mis->rect);
-	mis_paint_polyline(mis->polyline);*/
 	mis_paint_pages(&mis->pages);
 }

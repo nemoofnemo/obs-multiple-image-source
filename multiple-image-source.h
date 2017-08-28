@@ -172,10 +172,6 @@ struct multiple_image_source {
 	uint32_t width;
 	uint32_t height;
 	mis_pages_t pages;
-	/*mis_line_t * line;
-	mis_rectangle_t * rect;
-	mis_polyline_t * polyline;*/
-
 };
 typedef struct multiple_image_source multiple_image_source_t;
 
@@ -280,7 +276,7 @@ static void mis_paint_shape_array(mis_shape_array_t * arr);
 static void mis_init_pages(mis_pages_t * pages);
 
 static void mis_destroy_pages(mis_pages_t * pages);
-//create and push a new page to mis_pages
+//create and push a new page to mis_pages.
 static void mis_push_new_page(mis_pages_t * pages);
 
 static mis_shape_array_t * mis_get_page(mis_pages_t * pages, size_t idx);
@@ -333,6 +329,8 @@ static void mis_destroy(void *data);
 static void *mis_create(obs_data_t *settings, obs_source_t *source);
 
 static void mis_video_render(void *data, gs_effect_t *effect);
+
+static void mis_process_paint_event(multiple_image_source_t * mis, obs_data_t * settings);
 
 static void mis_video_tick(void *data, float seconds);
 
