@@ -330,6 +330,8 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source);
 
 static void mis_video_render(void *data, gs_effect_t *effect);
 
+static void mis_clear_paint_event(multiple_image_source_t * mis);
+
 static void mis_process_paint_event(multiple_image_source_t * mis, obs_data_t * settings);
 
 static void mis_video_tick(void *data, float seconds);

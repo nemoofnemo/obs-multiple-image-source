@@ -200,6 +200,12 @@ static void mis_update(void *data, obs_data_t *settings)
 
 	pthread_mutex_unlock(&mis->mutex);
 
+	mis_destroy_pages(&mis->pages);
+	mis_init_pages(&mis->pages);
+	for (int i = 0; i < new_files.num; ++i){
+		mis_push_new_page(&mis->pages);
+	}
+
 	/* ------------------------------------- */
 	/* clean up and restart transition */
 
@@ -325,10 +331,12 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source)
 
 	obs_source_update(source, NULL);
 
+	//init paint pages
 	mis_init_pages(&mis->pages);
-	mis_push_new_page(&mis->pages);
 
-	/*mis_line_t * line = mis_create_shape(LINE);
+	/*
+	//test code.
+	mis_line_t * line = mis_create_shape(LINE);
 	line->x1 = 1;
 	line->y1 = 1;
 	line->x2 = 2;
@@ -407,9 +415,13 @@ static void mis_video_tick(void *data, float seconds)
 		if (direction && *direction){
 			if (strcmp(direction, S_DIRECTION_NEXT) == 0){
 				mis_next_slide(mis);
+				mis_pages_next(&mis->pages);
+				mis_clear_paint_event(mis);
 			}
 			else if (strcmp(direction, S_DIRECTION_PREV) == 0){
 				mis_previous_slide(mis);
+				mis_pages_prev(&mis->pages);
+				mis_clear_paint_event(mis);
 			}
 			obs_data_set_string(settings, S_DIRECTION, "");
 		}
@@ -475,6 +487,15 @@ static void mis_process_paint_event(multiple_image_source_t * mis, obs_data_t * 
 		}
 		obs_data_set_string(settings, "create_shape", "");
 	}
+}
+
+static void mis_clear_paint_event(multiple_image_source_t * mis){
+	obs_data_t * settings = obs_source_get_settings(mis->source);
+	obs_data_set_bool(settings, "need_update", false);
+	obs_data_set_int(settings, "mouse_x", 0);
+	obs_data_set_int(settings, "mouse_y", 0);
+	obs_data_set_string(settings, "create_shape", "");
+	obs_data_release(settings);
 }
 
 static inline bool mis_audio_render_(obs_source_t *transition, uint64_t *ts_out,
@@ -1054,7 +1075,7 @@ static void mis_paint_pages(mis_pages_t * pages){
 }
 
 /* ------------------------------------------------------------------------- */
-//1s
+
 static void mis_paint(multiple_image_source_t * mis){
 	mis_paint_pages(&mis->pages);
 }
