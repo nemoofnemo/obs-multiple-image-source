@@ -328,7 +328,7 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source)
 	mis_init_pages(&mis->pages);
 	mis_push_new_page(&mis->pages);
 
-	mis_line_t * line = mis_create_shape(LINE);
+	/*mis_line_t * line = mis_create_shape(LINE);
 	line->x1 = 1;
 	line->y1 = 1;
 	line->x2 = 2;
@@ -358,7 +358,7 @@ static void *mis_create(obs_data_t *settings, obs_source_t *source)
 	
 	mis_push_shape_array(mis_get_page(&mis->pages, 0), LINE, line);
 	mis_push_shape_array(mis_get_page(&mis->pages, 0), RECTANGLE, rect);
-	mis_push_shape_array(mis_get_page(&mis->pages, 0), POLYLINE, polyline);
+	mis_push_shape_array(mis_get_page(&mis->pages, 0), POLYLINE, polyline);*/
 
 	return mis;
 
@@ -445,21 +445,36 @@ static void mis_process_paint_event(multiple_image_source_t * mis, obs_data_t * 
 		obs_data_set_bool(settings, "need_update", false);
 		int x = obs_data_get_int(settings, "mouse_x");
 		int y = obs_data_get_int(settings, "mouse_y");
-
 		obs_data_set_int(settings, "mouse_x", 0);
 		obs_data_set_int(settings, "mouse_y", 0);
+
+		const char * create = obs_data_get_string(settings, "create_shape");
+		if (create && *create){
+			if (strcmp(create, "polyline") == 0){
+				mis_polyline_t * polyline = mis_create_shape(POLYLINE);
+				polyline->width = 4;
+				polyline->rgba = mis_set_rgba(255, 0, 0, 255);
+				mis_push_back_polyline_node(polyline, x, y);
+				mis_setup_polyline(polyline);
+				mis_push_shape_array(
+					mis_get_page(&mis->pages, mis->pages.cur_page), 
+					POLYLINE, 
+					polyline);
+			}
+		}
+		else if (create && *create == '\0'){
+			mis_node_t * last = mis_get_last_from_array(
+				mis_get_page(&mis->pages, mis->pages.cur_page));
+			if (last){
+				if (last->shape == POLYLINE){
+					mis_polyline_t * polyline = last->data;
+					mis_push_back_polyline_node(polyline, x, y);
+					mis_setup_polyline(polyline);
+				}
+			}
+		}
+		obs_data_set_string(settings, "create_shape", "");
 	}
-	/*int x = obs_data_get_int(settings, "test_x");
-	int y = obs_data_get_int(settings, "test_y");
-	if (x != 0 && y != 0){
-		mis_shape_array_t * page = mis_get_page(&mis->pages, mis->pages.cur_page);
-		mis_node_t * node = mis_get_last_from_array(page);
-		mis_polyline_t * p = node->data;
-		mis_push_back_polyline_node(p, x, y);
-		mis_update_polyline(p);
-	}
-	obs_data_set_int(settings, "test_x", 0);
-	obs_data_set_int(settings, "test_y", 0);*/
 }
 
 static inline bool mis_audio_render_(obs_source_t *transition, uint64_t *ts_out,
@@ -579,6 +594,12 @@ static void mis_setup_line(mis_line_t * line){
 	if (line->width <= 0)
 		return;
 
+	if (line->buf){
+		obs_enter_graphics();
+		gs_vertexbuffer_destroy(line->buf);
+		obs_leave_graphics();
+	}
+
 	line->buf = NULL;
 	bool is_x_equal = line->x1 == line->x2;
 	bool is_y_equal = line->y1 == line->y2;
@@ -613,14 +634,6 @@ static void mis_setup_line(mis_line_t * line){
 		float a = (float)line->width * cos(atanf(k1));
 		float y1 = y_start - a / 2;
 		float y2 = y_start + a - a / 2;
-		if (fabs(y2 - y1) < 1.0f){
-			if (y2 > y1){
-				y2 = y1 + 1;
-			}
-			else{
-				y1 = y2 + 1;
-			}
-		}
 
 		if (y1 > y2){
 			mis_swapf(&y1, &y2);
@@ -728,24 +741,28 @@ static void mis_setup_rectangle(mis_rectangle_t * rect){
 	line.y1 = rect->y;
 	line.x2 = rect->x + rect->width + width_ex;
 	line.y2 = rect->y;
+	line.buf = rect->buf_arr[0];
 	mis_setup_line(&line);
 	rect->buf_arr[0] = line.buf;
 	line.x1 = rect->x + rect->width;
 	line.y1 = rect->y + width_ex;
 	line.x2 = line.x1;
 	line.y2 = rect->y + rect->height - width_ex;
+	line.buf = rect->buf_arr[1];
 	mis_setup_line(&line);
 	rect->buf_arr[1] = line.buf;
 	line.x1 = rect->x + rect->width + width_ex;
 	line.y1 = rect->y + rect->height;
 	line.x2 = rect->x - width_ex;
 	line.y2 = rect->y + rect->height;
+	line.buf = rect->buf_arr[2];
 	mis_setup_line(&line);
 	rect->buf_arr[2] = line.buf;
 	line.x1 = rect->x;
 	line.y1 = rect->y + rect->height - width_ex;
 	line.x2 = rect->x;
 	line.y2 = rect->y + width_ex;
+	line.buf = rect->buf_arr[3];
 	mis_setup_line(&line);
 	rect->buf_arr[3] = line.buf;
 }
@@ -820,8 +837,11 @@ static void mis_setup_polyline(mis_polyline_t * polyline){
 			temp = da_get(polyline->node_arr, i, mis_polyline_node_t);
 			line.x2 = temp->x;
 			line.y2 = temp->y;
-			mis_setup_line(&line);
-			temp->buf = line.buf;
+			line.buf = temp->buf;
+			if (temp->buf == NULL){
+				mis_setup_line(&line);
+				temp->buf = line.buf;
+			}
 		}
 	}
 }
@@ -889,12 +909,15 @@ static void * mis_create_shape(mis_shape_t shape){
 		break;
 	case LINE:
 		ret = bzalloc(sizeof(mis_line_t));
+		memset(ret, 0, sizeof(mis_line_t));
 		break;
 	case RECTANGLE:
 		ret = bzalloc(sizeof(mis_rectangle_t));
+		memset(ret, 0, sizeof(mis_rectangle_t));
 		break;
 	case POLYLINE:
 		ret = bzalloc(sizeof(mis_polyline_t));
+		memset(ret, 0, sizeof(mis_polyline_t));
 		mis_init_polyline(ret);
 		break;
 	default:
