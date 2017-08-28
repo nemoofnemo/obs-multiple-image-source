@@ -1,7 +1,6 @@
 # obs-multiple-image-source
- an obs-plugin based on slide-show.  
- Multiple-image-source is an obs-studio plugin based on slideshow source.This plugin also provides notation drawing feature on source.  
- The URL of complete project is https://github.com/nemoofnemo/obs-studio
+Multiple-image-source is an obs-studio plugin based on slideshow source.This plugin also provides notation drawing feature on source.  
+The URL of complete project is https://github.com/nemoofnemo/obs-studio
  
 ## path
  you can find source code in /obs-studio/plugins/image-source.
