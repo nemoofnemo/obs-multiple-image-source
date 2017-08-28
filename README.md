@@ -10,8 +10,10 @@ The URL of complete project is https://github.com/nemoofnemo/obs-studio
 	extern struct obs_source_info slideshow_info;
 	extern struct obs_source_info color_source_info;
 	extern struct obs_source_info multiple_image_source_info;
+	
+	//pen source is protype of multiple-image-source.
 	//extern struct obs_source_info pen_source_info;
-
+	
 	bool obs_module_load(void)
 	{
 		obs_register_source(&image_source_info);
