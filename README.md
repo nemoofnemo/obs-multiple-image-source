@@ -1,6 +1,6 @@
 # obs-multiple-image-source
 Multiple-image-source is an obs-studio plugin based on slideshow source.This plugin also provides notation drawing feature on source.  
-The URL of complete project is https://github.com/nemoofnemo/obs-studio
+Complete project: https://github.com/nemoofnemo/obs-studio
 
 基于obs-slideshow的显示多张图片的插件，核心功能是像演示ppt一样演示多张图片并可以在源上绘制图形。
  
@@ -126,9 +126,8 @@ like this:
 	
 
 ## todo
-  i'm working on painting polyline.  
-  next:  
-  change color,  
+  plugin
+  change color
   line  
   circle  
   arrow  
